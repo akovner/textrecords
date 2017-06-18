@@ -1,5 +1,67 @@
+id: http://alexkovner.com/textrecord
 $schema: http://json-schema.org/draft-04/schema#
 title: Text Record
 description: A data record, formated as fixed-width or delimited text
 type: object
 properties:
+  properties:
+    oneOf:
+      - $ref: '#/definitions/delimited-record'
+      - $ref: '#/definitions/fixed-record'
+definitions:
+  type-enum:
+    enum:
+      - string
+      - integer
+      - float
+  fixed-record:
+  delimited-record:
+    properties:
+      delimiter:
+        type: string
+        minLength: 1
+        maxLength: 1
+      string-token:
+        type: string
+        minLength: 1
+        maxLength: 1
+      string-token-escape:
+        type: string
+        minLength: 1
+      properties:
+        oneOf:
+          - $ref: '#/definitions/delimited-record-array'
+          - $ref: '#/definitions/delimited-record-object'
+    dependencies:
+      string-token-escape:
+        - string-token
+    required:
+      - properties
+  delimited-record-object:
+    type: object
+    properties:
+      index-base:
+        enum: [0, 1]
+        default: 1
+      properties:
+        type: object
+        additionalProperties:
+          type: object
+          properties:
+            type:
+              $ref: '#/definitions/type-enum'
+            first-index:
+              type: integer
+            last-index:
+              type: integer
+  delimited-record-array:
+    type: array
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          $ref: '#/definitions/type-enum'
+        length:
+          type: integer

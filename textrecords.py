@@ -1,3 +1,9 @@
+from unittest import TestCase
+from jsonschema import validate, Draft4Validator
+from os.path import dirname, join
+from yaml import load
+
+
 class ParseRule:
     pass
 
@@ -21,3 +27,12 @@ class RecordReader:
     """
     def __init__(self, *args):
         pass
+
+
+class TestSchemaValidity(TestCase):
+    def setUp(self):
+        with open(join(dirname(__file__), 'schemas', 'textrecord.schema.yaml'), 'rt') as f:
+            self.schema = load(f)
+
+    def test_validity(self):
+        self.assertIsNone(Draft4Validator.check_schema(self.schema))
