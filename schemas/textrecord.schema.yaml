@@ -3,65 +3,76 @@ $schema: http://json-schema.org/draft-04/schema#
 title: Text Record
 description: A data record, formated as fixed-width or delimited text
 type: object
-properties:
-  properties:
-    oneOf:
-      - $ref: '#/definitions/delimited-record'
-      - $ref: '#/definitions/fixed-record'
-definitions:
-  type-enum:
-    enum:
-      - string
-      - integer
-      - float
-  fixed-record:
-  delimited-record:
-    properties:
+oneOf:
+  - properties:
       delimiter:
         type: string
         minLength: 1
         maxLength: 1
-      string-token:
-        type: string
-        minLength: 1
-        maxLength: 1
-      string-token-escape:
-        type: string
-        minLength: 1
+        default: ','
+      stringFormat:
+        enum:
+          - json
+          - doublequote
       properties:
         oneOf:
-          - $ref: '#/definitions/delimited-record-array'
-          - $ref: '#/definitions/delimited-record-object'
-    dependencies:
-      string-token-escape:
-        - string-token
-    required:
-      - properties
-  delimited-record-object:
-    type: object
-    properties:
-      index-base:
-        enum: [0, 1]
-        default: 1
+          - type: object
+            additionalProperties:
+              type: object
+              properties:
+                type:
+                  $ref: '#/definitions/typeEnum'
+                location:
+                  type: integer
+                  minimum: 1
+          - type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                type:
+                  $ref: '#/definitions/typeEnum'
+    required: [properties]
+  - properties:
       properties:
-        type: object
-        additionalProperties:
-          type: object
-          properties:
-            type:
-              $ref: '#/definitions/type-enum'
-            first-index:
-              type: integer
-            last-index:
-              type: integer
-  delimited-record-array:
-    type: array
-    items:
-      type: object
-      properties:
-        name:
-          type: string
-        type:
-          $ref: '#/definitions/type-enum'
-        length:
-          type: integer
+        oneOf:
+          - type: object
+            additionalProperties:
+              type: object
+              properties:
+                type:
+                  $ref: '#/definitions/typeEnum'
+                start:
+                  type: integer
+                end:
+                  type: integer
+                padding:
+                  type: object
+                  $ref: '#/definitions/alignment'
+          - type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                type:
+                  $ref: '#/definitions/typeEnum'
+                length:
+                  type: integer
+    required: [properties]
+definitions:
+  typeEnum:
+    enum:
+      - string
+      - integer
+      - numeric
+  alignment:
+    padChar:
+      type: string
+      minLength: 1
+      maxLength: 1
+    alignment:
+      enum:
+        - left
+        - right

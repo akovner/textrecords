@@ -1,3 +1,7 @@
+$schema: http://alexkovner.com/textrecord
+properties:
+  delimiter: '|'
+
 boundary_style: fixed
 fields:
   name:
