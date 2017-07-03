@@ -14,6 +14,7 @@ oneOf:
         enum:
           - json
           - doublequote
+        default: json
       properties:
         oneOf:
           - type: object
@@ -25,6 +26,7 @@ oneOf:
                 location:
                   type: integer
                   minimum: 1
+              required: [type, location]
           - type: array
             items:
               type: object
@@ -33,6 +35,7 @@ oneOf:
                   type: string
                 type:
                   $ref: '#/definitions/typeEnum'
+              required: [name, type]
     required: [properties]
   - properties:
       properties:
@@ -50,6 +53,7 @@ oneOf:
                 padding:
                   type: object
                   $ref: '#/definitions/alignment'
+              required: [type, start, end]
           - type: array
             items:
               type: object
@@ -60,6 +64,7 @@ oneOf:
                   $ref: '#/definitions/typeEnum'
                 length:
                   type: integer
+              required: [name, type, length]
     required: [properties]
 definitions:
   typeEnum:

@@ -1,47 +1,17 @@
 $schema: http://alexkovner.com/textrecord
+delimiter: '.'
 properties:
-  delimiter: '|'
-
-boundary_style: fixed
-fields:
-  name:
-    type: object
-    boundary_style: fixed
-    fields:
-      first_name:
-        type: string
-        location: [0, 10]
-        alignment: left
-      last_name:
-        type: string
-        location: [10, 25]
-        alignment: left
-  address:
-    boundary_style: fixed
-    type: object
-    location: [25, 68]
-    fields:
-      - name: number
-        type: integer
-        length: 6
-        alignment: right
-        pad_char: _
-      - type: ignore
-        length: 2
-      - name: street
-        type: string
-        length: 15
-        alignment: left
-      - name: city
-        type: string
-        length: 15
-        alignment: left
-      - name: state
-        type: string
-        length: 2
-      - type: ignore
-        length: 1
-      - name: postal_code
-        type: string
-        length: 5
-        alignment: none
+  - name: first name
+    type: string
+  - name: last name
+    type: string
+  - name: house number
+    type: integer
+  - name: street name
+    type: string
+  - name: city
+    type: string
+  - name: state
+    type: string
+  - name: zip
+    type: string

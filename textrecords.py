@@ -34,5 +34,12 @@ class TestSchemaValidity(TestCase):
         with open(join(dirname(__file__), 'schemas', 'textrecord.schema.yaml'), 'rt') as f:
             self.schema = load(f)
 
-    def test_validity(self):
+    def test_metaschema_validity(self):
         self.assertIsNone(Draft4Validator.check_schema(self.schema))
+
+    def test_nameaddress_delimited_validity(self):
+        with open(join(dirname(__file__), 'examples', 'name_address.dlm.yaml'), 'rt') as f:
+            s = load(f)
+        res = Draft4Validator(self.schema).validate(s)
+        self.assertIsNone(res)
+
