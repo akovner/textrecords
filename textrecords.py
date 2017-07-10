@@ -1,8 +1,10 @@
 from unittest import TestCase
-from jsonschema import validate, Draft4Validator
+from jsonschema import Draft4Validator
 from os.path import dirname, join
-from yaml import load
+from json import load as json_load
 
+with open(join(dirname(__file__), 'schemas', 'textrecord.json'), 'rt') as f:
+    schema = json_load(f)
 
 class ParseRule:
     pass
@@ -31,15 +33,20 @@ class RecordReader:
 
 class TestSchemaValidity(TestCase):
     def setUp(self):
-        with open(join(dirname(__file__), 'schemas', 'textrecord.schema.yaml'), 'rt') as f:
-            self.schema = load(f)
+        self._validator = Draft4Validator(schema)
 
-    def test_metaschema_validity(self):
-        self.assertIsNone(Draft4Validator.check_schema(self.schema))
+    def test_schema_validity(self):
+        self.assertIsNone(Draft4Validator.check_schema(schema))
 
     def test_nameaddress_delimited_validity(self):
-        with open(join(dirname(__file__), 'examples', 'name_address.dlm.yaml'), 'rt') as f:
-            s = load(f)
-        res = Draft4Validator(self.schema).validate(s)
+        with open(join(dirname(__file__), 'examples', 'name_address.json'), 'rt') as f:
+            s = json_load(f)
+        res = self._validator.validate(s)
+        self.assertIsNone(res)
+
+    def test_nameaddressnested_validity(self):
+        with open(join(dirname(__file__), 'examples', 'name_address_nested.json'), 'rt') as f:
+            s = json_load(f)
+        res = self._validator.validate(s)
         self.assertIsNone(res)
 
