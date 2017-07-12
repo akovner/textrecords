@@ -1,0 +1,14 @@
+{
+    "$schema": "http://alexkovner.com/textrecord",
+    "properties": [
+        {
+            "name": "first name",
+            "length": 10,
+            "type": "string",
+            "padding": {
+                "alignment": "left",
+                "padChar": " "
+            }
+        }
+    ]
+}

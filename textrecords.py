@@ -38,15 +38,29 @@ class TestSchemaValidity(TestCase):
     def test_schema_validity(self):
         self.assertIsNone(Draft4Validator.check_schema(schema))
 
-    def test_nameaddress_delimited_validity(self):
+    def test_nameaddress_validity(self):
         with open(join(dirname(__file__), 'examples', 'name_address.json'), 'rt') as f:
             s = json_load(f)
-        res = self._validator.validate(s)
-        self.assertIsNone(res)
+        err_count = 0
+        for error in self._validator.iter_errors(s):
+            err_count += 1
+            print(error.message)
+        self.assertEquals(err_count, 0)
 
     def test_nameaddressnested_validity(self):
         with open(join(dirname(__file__), 'examples', 'name_address_nested.json'), 'rt') as f:
             s = json_load(f)
-        res = self._validator.validate(s)
-        self.assertIsNone(res)
+        err_count = 0
+        for error in self._validator.iter_errors(s):
+            err_count += 1
+            print(error.message)
+        self.assertEquals(err_count, 0)
 
+    def test_nameaddress_fixed_validity(self):
+        with open(join(dirname(__file__), 'examples', 'name_address_fixed.json'), 'rt') as f:
+            s = json_load(f)
+        err_count = 0
+        for error in self._validator.iter_errors(s):
+            err_count += 1
+            print(error.message)
+        self.assertEquals(err_count, 0)

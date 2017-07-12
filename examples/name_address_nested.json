@@ -37,7 +37,7 @@
                     },
                     {
                         "name": "state",
-                        "type": "stringgit a"
+                        "type": "string"
                     }
                 ]
             }

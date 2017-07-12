@@ -1,7 +1,7 @@
 {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "definitions": {
-        "alignment": {
+        "padding": {
             "alignment": {
                 "enum": [
                     "left",
@@ -11,7 +11,8 @@
             "padChar": {
                 "maxLength": 1,
                 "minLength": 1,
-                "type": "string"
+                "type": "string",
+                "default": " "
             }
         },
         "typeEnum": {
@@ -33,11 +34,17 @@
                     "minLength": 1,
                     "type": "string"
                 },
+                "description": {
+                    "type": "string"
+                },
                 "properties": {
                     "oneOf": [
                         {
                             "additionalProperties": {
                                 "properties": {
+                                    "description": {
+                                        "type": "string"
+                                    },
                                     "location": {
                                         "minimum": 1,
                                         "type": "integer"
@@ -64,6 +71,9 @@
                         {
                             "items": {
                                 "properties": {
+                                    "description": {
+                                        "type": "string"
+                                    },
                                     "name": {
                                         "type": "string"
                                     },
@@ -94,7 +104,6 @@
                             "default": "none",
                             "enum": [
                                 "json",
-                                "double_escape",
                                 "none"
                             ]
                         },
@@ -106,11 +115,15 @@
                 }
             },
             "required": [
-                "properties"
+                "properties",
+                "delimiter"
             ]
         },
         {
             "properties": {
+                "description": {
+                    "type": "string"
+                },
                 "properties": {
                     "oneOf": [
                         {
@@ -118,6 +131,9 @@
                                 "anyOf": [
                                     {
                                         "properties": {
+                                            "description": {
+                                                "type": "string"
+                                            },
                                             "end": {
                                                 "type": "integer"
                                             },
@@ -127,15 +143,24 @@
                                             "type": {
                                                 "$ref": "#"
                                             }
-                                        }
+                                        },
+                                        "required": [
+                                            "start",
+                                            "end",
+                                            "type"
+                                        ],
+                                        "type": "object"
                                     },
                                     {
                                         "properties": {
+                                            "description": {
+                                                "type": "string"
+                                            },
                                             "end": {
                                                 "type": "integer"
                                             },
                                             "padding": {
-                                                "$ref": "#/definitions/alignment",
+                                                "$ref": "#/definitions/padding",
                                                 "type": "object"
                                             },
                                             "start": {
@@ -161,6 +186,9 @@
                                 "anyOf": [
                                     {
                                         "properties": {
+                                            "description": {
+                                                "type": "string"
+                                            },
                                             "length": {
                                                 "type": "integer"
                                             },
@@ -180,6 +208,9 @@
                                     },
                                     {
                                         "properties": {
+                                            "description": {
+                                                "type": "string"
+                                            },
                                             "length": {
                                                 "type": "integer"
                                             },
@@ -187,7 +218,7 @@
                                                 "type": "string"
                                             },
                                             "padding": {
-                                                "$ref": "#/definitions/alignment",
+                                                "$ref": "#/definitions/padding",
                                                 "type": "object"
                                             },
                                             "type": {
