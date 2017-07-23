@@ -1,10 +1,11 @@
 from unittest import TestCase
 from jsonschema import Draft4Validator
+from pathlib import Path
 from os.path import dirname, join
 from json import load as json_load
 
 with open(join(dirname(__file__), 'schemas', 'textrecord.json'), 'rt') as f:
-    schema = json_load(f)
+    textrecord_schema = json_load(f)
 
 class ParseRule:
     pass
@@ -33,34 +34,17 @@ class RecordReader:
 
 class TestSchemaValidity(TestCase):
     def setUp(self):
-        self._validator = Draft4Validator(schema)
+        self._validator = Draft4Validator(textrecord_schema)
 
-    def test_schema_validity(self):
-        self.assertIsNone(Draft4Validator.check_schema(schema))
+    def test_textrecord_schema_validity(self):
+        self.assertIsNone(Draft4Validator.check_schema(textrecord_schema))
 
-    def test_nameaddress_validity(self):
-        with open(join(dirname(__file__), 'examples', 'name_address.json'), 'rt') as f:
-            s = json_load(f)
-        err_count = 0
-        for error in self._validator.iter_errors(s):
-            err_count += 1
-            print(error.message)
-        self.assertEquals(err_count, 0)
-
-    def test_nameaddressnested_validity(self):
-        with open(join(dirname(__file__), 'examples', 'name_address_nested.json'), 'rt') as f:
-            s = json_load(f)
-        err_count = 0
-        for error in self._validator.iter_errors(s):
-            err_count += 1
-            print(error.message)
-        self.assertEquals(err_count, 0)
-
-    def test_nameaddress_fixed_validity(self):
-        with open(join(dirname(__file__), 'examples', 'name_address_fixed.json'), 'rt') as f:
-            s = json_load(f)
-        err_count = 0
-        for error in self._validator.iter_errors(s):
-            err_count += 1
-            print(error.message)
-        self.assertEquals(err_count, 0)
+    def test_example_schema_validity(self):
+        for path in Path(join(dirname(__file__), 'examples', 'schemas')).glob('*.json'):
+            with open(path, 'rt') as f:
+                sch = json_load(f)
+            err_count = 0
+            for error in self._validator.iter_errors(sch):
+                err_count += 1
+                print(error.message)
+            self.assertEquals(err_count, 0)

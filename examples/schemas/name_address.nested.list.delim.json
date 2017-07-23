@@ -38,6 +38,10 @@
                     {
                         "name": "state",
                         "type": "string"
+                    },
+                    {
+                        "name": "zip code",
+                        "type": "string"
                     }
                 ]
             }
