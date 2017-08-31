@@ -6,17 +6,27 @@ from json import load as json_load
 
 with open(join(dirname(__file__), 'schemas', 'textrecord.json'), 'rt') as f:
     textrecord_schema = json_load(f)
+validator = Draft4Validator(textrecord_schema)
+
 
 class ParseRule:
+    def __init__(self, schema):
+        validator.validate(schema)
+        self._parsers = []
+        if 'delimiter' in schema:
+            self._parsers.append(ParseRuleDelimited(schema))
+        else:
+            self._parser.append(ParseRuleFixedWidth(schema))
+
+
+class ParseRuleFixedWidth:
     pass
 
 
-class ParseRuleFixedWidth(ParseRule):
-    pass
+class ParseRuleDelimited:
+    def __init__(self, schema):
+        self._delimiter = schema['delimiter']
 
-
-class ParseRuleDelimited(ParseRule):
-    pass
 
 
 class RecordReader:
@@ -33,9 +43,6 @@ class RecordReader:
 
 
 class TestSchemaValidity(TestCase):
-    def setUp(self):
-        self._validator = Draft4Validator(textrecord_schema)
-
     def test_textrecord_schema_validity(self):
         self.assertIsNone(Draft4Validator.check_schema(textrecord_schema))
 
@@ -44,7 +51,7 @@ class TestSchemaValidity(TestCase):
             with open(path, 'rt') as f:
                 sch = json_load(f)
             err_count = 0
-            for error in self._validator.iter_errors(sch):
+            for error in validator.iter_errors(sch):
                 err_count += 1
                 print(error.message)
             self.assertEquals(err_count, 0)
