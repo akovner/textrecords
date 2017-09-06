@@ -10,23 +10,78 @@ validator = Draft4Validator(textrecord_schema)
 
 
 class ParseRule:
-    def __init__(self, schema):
-        validator.validate(schema)
-        self._parsers = []
-        if 'delimiter' in schema:
-            self._parsers.append(ParseRuleDelimited(schema))
-        else:
-            self._parser.append(ParseRuleFixedWidth(schema))
-
-
-class ParseRuleFixedWidth:
     pass
 
+class ParseRuleComposite(ParseRule):
+    pass
 
-class ParseRuleDelimited:
+class ParseRuleFixedWidth(ParseRuleComposite):
+    def __init__(self, schema):
+        self._parse_rules = []
+        if isinstance(schema['properties'], dict):
+            for name, obj in schema['properties'].items():
+                pass
+        else:
+            for obj in schema['properties']:
+                if isinstance(obj['type'], str):
+                    if obj['type'] == 'string':
+                        self._parse_rules.append(ParseRuleStringFixed(obj))
+                    elif obj['type'] == 'integer':
+                        self._parse_rules.append(ParseRuleIntegerFixed(obj))
+                    else:
+                        self._parse_rules.append(ParseRuleNumericFixed(obj))
+                else:
+                    if 'delimiter' in obj:
+                        self._parse_rules.append(ParseRuleDelimited(obj))
+                    else:
+                        self._parse_rules.append(ParseRuleFixedWidth(obj))
+
+
+class ParseRuleDelimited(ParseRuleComposite):
     def __init__(self, schema):
         self._delimiter = schema['delimiter']
 
+
+class ParseRulePrimitive(ParseRule):
+    pass
+
+
+class ParseRulePrimitiveFixed(ParseRulePrimitive):
+    pass
+
+
+class ParseRulePrimitiveDelim(ParseRulePrimitive):
+    pass
+
+
+class ParseRuleStringFixed(ParseRulePrimitiveFixed):
+    def __init__(self, name):
+        pass
+
+
+class ParseRuleIntegerFixed(ParseRulePrimitiveFixed):
+    def __init__(self, name):
+        pass
+
+
+class ParseRuleNumericFixed(ParseRulePrimitiveFixed):
+    def __init__(self):
+        pass
+
+
+class ParseRuleStringFixed(ParseRulePrimitiveFixed):
+    def __init__(self, name):
+        pass
+
+
+class ParseRuleIntegerFixed(ParseRulePrimitiveFixed):
+    def __init__(self, name):
+        pass
+
+
+class ParseRuleNumericFixed(ParseRulePrimitiveFixed):
+    def __init__(self):
+        pass
 
 
 class RecordReader:
@@ -38,8 +93,12 @@ class RecordReader:
           to the json schema for parsing text records
         - A :class:`ParseRule` object
     """
-    def __init__(self, *args):
-        pass
+    def __init__(self, schema):
+        validator.validate(schema)
+        if 'delimited' in schema:
+            self._root = ParseRuleDelimited(schema)
+        else:
+            self._root = ParseRuleFixedWidth(schema)
 
 
 class TestSchemaValidity(TestCase):
