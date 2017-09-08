@@ -1,0 +1,34 @@
+{
+    "$schema": "http://alexkovner.com/textrecord",
+    "delimiter": ".",
+    "properties": {
+      "first name": {
+        "location": 1,
+        "type": "string"
+      },
+      "last name": {
+        "location": 2,
+        "type": "string"
+      },
+      "house number": {
+        "location": 3,
+        "type": "integer"
+      },
+      "street name": {
+        "location": 4,
+        "type": "string"
+      },
+      "city": {
+        "location": 5,
+        "type": "string"
+      },
+      "state": {
+        "location": 6,
+        "type": "string"
+      },
+      "zip": {
+        "location": 7,
+        "type": "string"
+      }
+    }
+}

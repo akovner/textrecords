@@ -3,21 +3,35 @@ from jsonschema import Draft4Validator
 from pathlib import Path
 from os.path import dirname, join
 from json import load as json_load
+from operator import itemgetter
 
 with open(join(dirname(__file__), 'schemas', 'textrecord.json'), 'rt') as f:
     textrecord_schema = json_load(f)
 validator = Draft4Validator(textrecord_schema)
 
+def merge_dicts(*dict_args):
+    """
+    Given any number of dicts, shallow copy and merge into a new dict,
+    precedence goes to key value pairs in latter dicts.
+    """
+    result = {}
+    for dictionary in dict_args:
+        result.update(dictionary)
+    return result
+
 
 class ParseRule:
     pass
 
+
 class ParseRuleComposite(ParseRule):
     pass
+
 
 class ParseRuleFixedWidth(ParseRuleComposite):
     def __init__(self, schema):
         self._parse_rules = []
+
         if isinstance(schema['properties'], dict):
             for name, obj in schema['properties'].items():
                 pass
@@ -40,6 +54,30 @@ class ParseRuleFixedWidth(ParseRuleComposite):
 class ParseRuleDelimited(ParseRuleComposite):
     def __init__(self, schema):
         self._delimiter = schema['delimiter']
+        self._parse_rules = []
+
+        if isinstance(schema['properties'], dict):
+            pr_defs = []
+            for name, orig in schema['properties'].items():
+                obj = orig.copy()
+                obj['name'] = name
+                pr_defs.append(obj)
+            pr_defs = sorted(pr_defs, key=itemgetter('location'))
+            for pr_def in pr_defs:
+                del pr_def['location']
+                
+            for pr_def in pr_defs:
+                if isinstance(pr_def['type'], str):
+                    if pr_def['type'] == 'string':
+                        self._parse_rules.append(ParseRuleStringDelim(pr_def))
+                    elif pr_def['type'] == 'integer':
+                        self._parse_rules.append(ParseRuleIntegerDelim(pr_def))
+                    else:
+                        self._parse_rules.append(ParseRuleNumericDelim(pr_def))
+                elif 'delimited' in pr_def:
+                    self._parse_rules.append(ParseRule)
+                else:
+                    pass
 
 
 class ParseRulePrimitive(ParseRule):
@@ -80,6 +118,21 @@ class ParseRuleIntegerFixed(ParseRulePrimitiveFixed):
 
 
 class ParseRuleNumericFixed(ParseRulePrimitiveFixed):
+    def __init__(self):
+        pass
+
+
+class ParseRuleStringDelim(ParseRulePrimitiveDelim):
+    def __init__(self, name):
+        pass
+
+
+class ParseRuleIntegerDelim(ParseRulePrimitiveDelim):
+    def __init__(self, name):
+        pass
+
+
+class ParseRuleNumericDelim(ParseRulePrimitiveDelim):
     def __init__(self):
         pass
 
