@@ -1,9 +1,10 @@
 from unittest import TestCase
-from jsonschema import Draft4Validator
+from jsonschema import Draft4Validator, ValidationError
 from pathlib import Path
 from os.path import dirname, join
 from json import load as json_load
 from operator import itemgetter
+from collections import OrderedDict
 
 with open(join(dirname(__file__), 'schemas', 'textrecord.json'), 'rt') as f:
     textrecord_schema = json_load(f)
@@ -18,6 +19,77 @@ def merge_dicts(*dict_args):
     for dictionary in dict_args:
         result.update(dictionary)
     return result
+
+
+class ParseRule():
+    def __call__(self, *args, **kwargs):
+        """
+
+        :param *args: path to a data element
+        :type *args: str or integer
+        :param **kwargs:
+        :return: The object or value at that location
+        """
+        pass
+
+    def schema(self):
+        """
+        The schema or schema fragment for this parse rule
+        :return: dict or array
+        """
+
+
+class ParseRuleMeta(type):
+    def __new__(cls, name, parents, dct):
+        if 'schema' not in dct:
+            raise IndexError('`schema` class member must be defined')
+
+        sch = dct['schema']
+        try:
+            validator.validate(sch)
+        except ValidationError:
+            raise ValidationError('`schema` failed to validate')
+
+        dct['_root'] =
+        dct['_fields'] = OrderedDict()
+        fields = dct['_fields']
+        if 'delimiter' in sch:
+            pass
+        else:
+            if isinstance(sch, dict):
+                for name, obj in sch['properties'].items():
+                    if isinstance(obj['type'], str):
+                        fields[name] = get_fixed_parserule_class(obj['type'])
+                    elif 'delimiter' in obj['type']:
+                        fields[name] = ParseRuleFixedMeta('', (), {'schema': obj['type']})
+                    else:
+                        fields[name] = ParseRuleDelimMeta('', (), {'schema': obj['type']})
+
+            else:
+                for obj in sch:
+                    if isinstance(obj['type'], str):
+                        pass
+
+
+class ParseRuleDelimMeta(type):
+    def __new__(cls, name, parents, dct):
+        pass
+
+
+class ParseRuleFixedMeta(type):
+    def __new__(cls, name, parents, dct):
+        pass
+
+
+def get_fixed_parserule_class(type):
+    if type == 'string':
+        return ParseRuleStringFixed
+    elif type == 'numeric':
+        return ParseRuleNumericFixed
+    elif type == 'integer':
+        return ParseRuleIntegerFixed
+    else:
+        raise ValueError('argument `type` must be in the set {`string`, `numeric`, `integer`}')
 
 
 class ParseRule:
@@ -49,6 +121,11 @@ class ParseRuleFixedWidth(ParseRuleComposite):
                         self._parse_rules.append(ParseRuleDelimited(obj))
                     else:
                         self._parse_rules.append(ParseRuleFixedWidth(obj))
+
+    def parse(self, s):
+        ret = {}
+        for pr in self._parse_rules:
+
 
 
 class ParseRuleDelimited(ParseRuleComposite):
@@ -85,7 +162,21 @@ class ParseRulePrimitive(ParseRule):
 
 
 class ParseRulePrimitiveFixed(ParseRulePrimitive):
-    pass
+    def __init__(self, schema):
+        self._name = schema['name']
+
+    def parse(self, s):
+
+
+class ParseRuleInteger(ParseRulePrimitive):
+
+
+class ParseRuleIntegerFixedPadded(ParseRuleInteger, ParseRulePrimitive, ParseRulePadded):
+    def __init__(self, schema):
+        super().__init__(self, schema)
+
+    def parse(self, s):
+        raw_string = super().pa
 
 
 class ParseRulePrimitiveDelim(ParseRulePrimitive):
