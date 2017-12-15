@@ -38,10 +38,6 @@ def classproperty(fget):
     return ReadClassPropertyDescriptor(fget)
 
 
-class ParseRule():
-    pass
-
-
 class RecordSchema:
 
     @classproperty
@@ -53,22 +49,63 @@ class RecordSchema:
         return cls._root_class
 
 
+class ParseRule():
+
+    @classproperty
+    def parent(cls):
+        return cls._parent
+
+    @classproperty
+    def field_name(cls):
+        return cls._field_name
+
+
+class ParseRuleCompound(ParseRule):
+
 class ParseRuleDelimited(ParseRule):
     @classproperty
     def delimiter(cls):
         return cls._delimiter
 
 
+class ParseRulePrimitive(ParseRule):
+    pass
+
+
+class ParseRuleString(ParseRulePrimitive):
+    pass
+
+
+class ParseRuleInteger(ParseRulePrimitive):
+    pass
+
+
+class ParseRuleNumber(ParseRulePrimitive):
+    pass
+
 class ParseRuleMeta(type):
     def __new__(mcs, name, parents, dct):
-        if 'delimiter' in dct['_schema']:
+        if '_field_name' not in dct:
+            dct['_field_name'] = None
+            
+        if isinstance(dct['_schema'], str):
+            if dct['_schema'] == 'string':
+                parents = (ParseRuleString, ) + parents
+            elif dct['_schema'] == 'integer':
+                parents = (ParseRuleInteger, ) + parents
+            else:
+                parents = (ParseRuleNumber, ) + parents
+        elif 'delimiter' in dct['_schema']:
             dct['_delimiter'] = dct['_schema']['delimiter']
             parents = (ParseRuleDelimited, ) + parents
-            props = {}
+            fields = {}
             for obj in dct['_schema']['properties']:
-                props[obj['name']] = ParseRuleMeta('{0:s}_{1:s}'.format(name, obj['name']),
+                fields[obj['name']] = ParseRuleMeta('{0:s}_{1:s}'.format(name, obj['name']),
                                                    (),
-                                                   {'_schema': deepcopy(obj), 'parent': mcs})
+                                                   {'_schema': deepcopy(obj['type']),
+                                                    '_field_name': obj['name'],
+                                                    '_parent': mcs})
+        else:
 
         return super(ParseRuleMeta, mcs).__new__(mcs, name, parents, dct)
 
@@ -83,7 +120,7 @@ class RecordSchemaMeta(type):
         except ValidationError:
             raise ValidationError('`_schema` failed to validate')
 
-        dct['_root_class'] = ParseRuleMeta('{:s}_root'.format(name), (), {'_schema': deepcopy(dct['_schema']), 'parent': mcs})
+        dct['_root_class'] = ParseRuleMeta('{:s}_root'.format(name), (), {'_schema': deepcopy(dct['_schema']), '_parent': mcs})
 
         if RecordSchema not in parents:
             parents = (RecordSchema, ) + parents
