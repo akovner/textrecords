@@ -61,14 +61,30 @@ class ParseRule():
 
 
 class ParseRuleCompound(ParseRule):
+    pass
 
-class ParseRuleDelimited(ParseRule):
+
+class ParseRuleDelimited(ParseRuleCompound):
     @classproperty
     def delimiter(cls):
         return cls._delimiter
 
 
+class ParseRuleFixed(ParseRuleCompound):
+    @classproperty
+    def len(cls):
+        pass
+
+
 class ParseRulePrimitive(ParseRule):
+    pass
+
+
+class ParseRulePrimitiveFixed(ParseRulePrimitive):
+    pass
+
+
+class ParseRulePrimitiveDelimited(ParseRulePrimitive):
     pass
 
 
@@ -83,31 +99,66 @@ class ParseRuleInteger(ParseRulePrimitive):
 class ParseRuleNumber(ParseRulePrimitive):
     pass
 
+
+class ParseRuleStringFixed(ParseRulePrimitiveFixed, ParseRuleString):
+    pass
+
+
+class ParseRuleIntegerFixed(ParseRulePrimitiveFixed, ParseRuleInteger):
+    pass
+
+
+class ParseRuleNumberFixed(ParseRulePrimitiveFixed, ParseRuleNumber):
+    pass
+
+
+class ParseRuleStringDelimited(ParseRulePrimitiveDelimited, ParseRuleString):
+    pass
+
+
+class ParseRuleIntegerDelimited(ParseRulePrimitiveDelimited, ParseRuleInteger):
+    pass
+
+
+class ParseRuleNumberDelimited(ParseRulePrimitiveDelimited, ParseRuleNumber):
+    pass
+
+
 class ParseRuleMeta(type):
     def __new__(mcs, name, parents, dct):
         if '_field_name' not in dct:
             dct['_field_name'] = None
-            
-        if isinstance(dct['_schema'], str):
-            if dct['_schema'] == 'string':
-                parents = (ParseRuleString, ) + parents
-            elif dct['_schema'] == 'integer':
-                parents = (ParseRuleInteger, ) + parents
-            else:
-                parents = (ParseRuleNumber, ) + parents
+
+        is_parent_delimited = issubclass(dct['_parent'], ParseRuleDelimited)
+        compound_superclass = ParseRulePrimitiveDelimited if is_parent_delimited else ParseRulePrimitiveFixed
+
+        primitive_switch = {
+            'string': ParseRuleString,
+            'integer': ParseRuleInteger,
+            'number': ParseRuleNumber
+        }
+
+        is_primitive = isinstance(dct['_schema'], str)
+        if is_primitive:
+            parents = (primitive_switch[dct['_schema']], compound_superclass, ) + parents
         elif 'delimiter' in dct['_schema']:
             dct['_delimiter'] = dct['_schema']['delimiter']
             parents = (ParseRuleDelimited, ) + parents
+        else:
+            parents = (ParseRuleFixed, ) + parents
+
+        cls = super(ParseRuleMeta, mcs).__new__(mcs, name, parents, dct)
+        if not is_primitive:
             fields = {}
             for obj in dct['_schema']['properties']:
                 fields[obj['name']] = ParseRuleMeta('{0:s}_{1:s}'.format(name, obj['name']),
                                                    (),
                                                    {'_schema': deepcopy(obj['type']),
                                                     '_field_name': obj['name'],
-                                                    '_parent': mcs})
-        else:
+                                                    '_parent': cls})
+            cls._fields = fields
 
-        return super(ParseRuleMeta, mcs).__new__(mcs, name, parents, dct)
+        return cls
 
 
 class RecordSchemaMeta(type):
@@ -120,12 +171,12 @@ class RecordSchemaMeta(type):
         except ValidationError:
             raise ValidationError('`_schema` failed to validate')
 
-        dct['_root_class'] = ParseRuleMeta('{:s}_root'.format(name), (), {'_schema': deepcopy(dct['_schema']), '_parent': mcs})
-
         if RecordSchema not in parents:
             parents = (RecordSchema, ) + parents
-
-        return super(RecordSchemaMeta, mcs).__new__(mcs, name, parents, dct)
+        cls = super(RecordSchemaMeta, mcs).__new__(mcs, name, parents, dct)
+        cls._root_class = ParseRuleMeta('{:s}_root'.format(name), (), {'_schema': deepcopy(dct['_schema']),
+                                                                       '_parent': cls})
+        return cls
         # fields = dct['_fields']
         # if 'delimiter' in sch:
         #     pass
