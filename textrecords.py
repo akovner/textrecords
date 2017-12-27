@@ -6,6 +6,7 @@ from json import load as json_load
 from operator import itemgetter
 from collections import OrderedDict
 from copy import deepcopy
+import re
 
 with open(join(dirname(__file__), 'schemas', 'textrecord.json'), 'rt') as f:
     textrecord_schema = json_load(f)
@@ -100,63 +101,83 @@ class ParseRuleNumber(ParseRulePrimitive):
     pass
 
 
-class ParseRuleStringFixed(ParseRulePrimitiveFixed, ParseRuleString):
-    pass
-
-
-class ParseRuleIntegerFixed(ParseRulePrimitiveFixed, ParseRuleInteger):
-    pass
-
-
-class ParseRuleNumberFixed(ParseRulePrimitiveFixed, ParseRuleNumber):
-    pass
-
-
-class ParseRuleStringDelimited(ParseRulePrimitiveDelimited, ParseRuleString):
-    pass
-
-
-class ParseRuleIntegerDelimited(ParseRulePrimitiveDelimited, ParseRuleInteger):
-    pass
-
-
-class ParseRuleNumberDelimited(ParseRulePrimitiveDelimited, ParseRuleNumber):
-    pass
-
-
 class ParseRuleMeta(type):
-    def __new__(mcs, name, parents, dct):
-        if '_field_name' not in dct:
-            dct['_field_name'] = None
 
-        is_parent_delimited = issubclass(dct['_parent'], ParseRuleDelimited)
-        compound_superclass = ParseRulePrimitiveDelimited if is_parent_delimited else ParseRulePrimitiveFixed
-
-        primitive_switch = {
+    @staticmethod
+    def primitive_switch(k):
+        d = {
             'string': ParseRuleString,
             'integer': ParseRuleInteger,
             'number': ParseRuleNumber
         }
+        return d[k]
+
+    def __new__(mcs, name, parents, dct):
+        if '_field_name' not in dct:
+            dct['_field_name'] = None
 
         is_primitive = isinstance(dct['_schema'], str)
         if is_primitive:
-            parents = (primitive_switch[dct['_schema']], compound_superclass, ) + parents
-        elif 'delimiter' in dct['_schema']:
-            dct['_delimiter'] = dct['_schema']['delimiter']
-            parents = (ParseRuleDelimited, ) + parents
+            compound_superclass = (ParseRulePrimitiveDelimited
+                                   if issubclass(dct['_parent'], ParseRuleDelimited)
+                                   else ParseRulePrimitiveFixed)
+            if compound_superclass is ParseRuleDelimited:
+                dct['_regex_str'] = '([^{0:s}]*)'.format(dct['_parent'].delimiter)
+                dct['_re'] = re.compile(dct['_regex_str'])
+
+                def init(self, rem):
+                    m = self._regex.match(rem)
+                    self._raw = m.group(1)
+                    self._remainder = m.group(2)
+            else:
+                pass
+
+            parents = (mcs.primitive_switch(dct['_schema']), compound_superclass, ) + parents
         else:
-            parents = (ParseRuleFixed, ) + parents
+
+            def getitem(c, k):
+                return c._fields[k]
+            mcs.__getitem__ = getitem
+
+            def iter(c):
+                c._iter_place = 0
+                return c
+            mcs.__iter__ = iter
+
+            def next(c):
+                if c._iter_place >= len(c._fields_idx):
+                    raise StopIteration
+                else:
+                    k = c._fields_idx[c._iter_place]
+                    c._iter_place += 1
+                    return c._fields[k]
+            mcs.__next__ = next
+
+
+            if 'delimiter' in dct['_schema']:
+                dct['_delimiter'] = dct['_schema']['delimiter']
+                parents = (ParseRuleDelimited, ) + parents
+            else:
+                parents = (ParseRuleFixed, ) + parents
 
         cls = super(ParseRuleMeta, mcs).__new__(mcs, name, parents, dct)
         if not is_primitive:
             fields = {}
-            for obj in dct['_schema']['properties']:
+            fields_idx = []
+            for i, obj in enumerate(dct['_schema']['properties']):
                 fields[obj['name']] = ParseRuleMeta('{0:s}_{1:s}'.format(name, obj['name']),
                                                    (),
                                                    {'_schema': deepcopy(obj['type']),
                                                     '_field_name': obj['name'],
                                                     '_parent': cls})
+                fields_idx.append(obj['name'])
+
             cls._fields = fields
+            cls._fields_idx = tuple(fields_idx)
+
+            regex = []
+            for fld in mcs:
+                regex.append(fld.regex)
 
         return cls
 
