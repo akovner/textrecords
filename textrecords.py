@@ -113,6 +113,12 @@ class ParseRuleMeta(type):
         return d[k]
 
     def __new__(mcs, name, parents, dct):
+
+        @property
+        def regex_str_prop(c):
+            return c._regex_str
+        mcs.reges_str = regex_str_prop
+
         if '_field_name' not in dct:
             dct['_field_name'] = None
 
@@ -136,7 +142,15 @@ class ParseRuleMeta(type):
         else:
 
             def getitem(c, k):
-                return c._fields[k]
+                if isinstance(k, int):
+                    if 0 <= k < c._len:
+                        return c._fields[c._fields_idx[k]]
+                    else:
+                        raise IndexError('Index out of range: {0:d} not between 0 and {1:d}'.format(k, c._len))
+                elif isinstance(k, str):
+                    return c._fields[k]
+                else:
+                    raise IndexError('Index must be of type `str` or `int`')
             mcs.__getitem__ = getitem
 
             def iter(c):
@@ -174,10 +188,29 @@ class ParseRuleMeta(type):
 
             cls._fields = fields
             cls._fields_idx = tuple(fields_idx)
+            cls._len = len(cls._fields_idx)
 
-            regex = []
-            for fld in mcs:
-                regex.append(fld.regex)
+            regex_array = []
+            for fld in cls:
+                if issubclass(fld, ParseRulePrimitive):
+                    regex_array.append('({:s})'.format(f.regex_str))
+                else:
+                    regex_array.append(f.regex_str)
+            if issubclass(cls, ParseRuleDelimited):
+                cls._regex_str = cls.delimiter.join(regex_array)
+            else:
+                cls._regex_str = ''.join(regex_array)
+        else:
+            if issubclass(cls, ParseRulePrimitiveDelimited):
+                if issubclass(cls, ParseRuleString):
+                    cls._regex_str = '[^{:s}]'.format(cls.delimiter)
+                elif issubclass(cls, ParseRuleNumber):
+                    cls._regex_str = '[0-9]+(?:\.[0-9]*)'
+                else:
+                    cls._regex_str = '[0-9]+'
+            else:
+                pass
+
 
         return cls
 
