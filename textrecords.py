@@ -117,7 +117,7 @@ class ParseRuleMeta(type):
         @property
         def regex_str_prop(c):
             return c._regex_str
-        mcs.reges_str = regex_str_prop
+        mcs.regex_str = regex_str_prop
 
         if '_field_name' not in dct:
             dct['_field_name'] = None
@@ -167,6 +167,11 @@ class ParseRuleMeta(type):
                     return c._fields[k]
             mcs.__next__ = next
 
+            @property
+            def regex_str_prop(cls):
+                return cls._regex_str
+            mcs.regex_str = regex_str_prop
+
 
             if 'delimiter' in dct['_schema']:
                 dct['_delimiter'] = dct['_schema']['delimiter']
@@ -193,9 +198,9 @@ class ParseRuleMeta(type):
             regex_array = []
             for fld in cls:
                 if issubclass(fld, ParseRulePrimitive):
-                    regex_array.append('({:s})'.format(f.regex_str))
+                    regex_array.append('({:s})'.format(fld.regex_str))
                 else:
-                    regex_array.append(f.regex_str)
+                    regex_array.append(fld.regex_str)
             if issubclass(cls, ParseRuleDelimited):
                 cls._regex_str = cls.delimiter.join(regex_array)
             else:
@@ -203,14 +208,13 @@ class ParseRuleMeta(type):
         else:
             if issubclass(cls, ParseRulePrimitiveDelimited):
                 if issubclass(cls, ParseRuleString):
-                    cls._regex_str = '[^{:s}]'.format(cls.delimiter)
+                    cls._regex_str = '[^{:s}]*'.format(delim_escape(cls.parent.delimiter))
                 elif issubclass(cls, ParseRuleNumber):
                     cls._regex_str = '[0-9]+(?:\.[0-9]*)'
                 else:
                     cls._regex_str = '[0-9]+'
             else:
-                pass
-
+                cls._regex_str = '.{{{:d}}}'.format(cls.len)
 
         return cls
 
@@ -249,3 +253,6 @@ class RecordSchemaMeta(type):
         #             if isinstance(obj['type'], str):
         #                 pass
 
+
+def delim_escape(d):
+    return d
