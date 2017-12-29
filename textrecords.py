@@ -1,11 +1,8 @@
-from unittest import TestCase
 from jsonschema import Draft4Validator, ValidationError
-from pathlib import Path
 from os.path import dirname, join
 from json import load as json_load
-from operator import itemgetter
-from collections import OrderedDict
 from copy import deepcopy
+from enum import Enum
 import re
 
 with open(join(dirname(__file__), 'schemas', 'textrecord.json'), 'rt') as f:
@@ -39,6 +36,13 @@ def classproperty(fget):
     return ReadClassPropertyDescriptor(fget)
 
 
+class ParseLevel(Enum):
+    UNPARSED = 1
+    RAW = 2
+    TRIMMED = 3
+    PARSED = 4
+
+
 class RecordSchema:
 
     @classproperty
@@ -69,6 +73,10 @@ class ParseRuleDelimited(ParseRuleCompound):
     @classproperty
     def delimiter(cls):
         return cls._delimiter
+
+    @classproperty
+    def delim_regex(cls):
+        return ''.join(['\\x{:s}'.format(c.encode('unicode_escape').hex()) for c in cls.delimiter])
 
 
 class ParseRuleFixed(ParseRuleCompound):
@@ -127,20 +135,8 @@ class ParseRuleMeta(type):
             compound_superclass = (ParseRulePrimitiveDelimited
                                    if issubclass(dct['_parent'], ParseRuleDelimited)
                                    else ParseRulePrimitiveFixed)
-            if compound_superclass is ParseRuleDelimited:
-                dct['_regex_str'] = '([^{0:s}]*)'.format(dct['_parent'].delimiter)
-                dct['_re'] = re.compile(dct['_regex_str'])
-
-                def init(self, rem):
-                    m = self._regex.match(rem)
-                    self._raw = m.group(1)
-                    self._remainder = m.group(2)
-            else:
-                pass
-
             parents = (mcs.primitive_switch(dct['_schema']), compound_superclass, ) + parents
         else:
-
             def getitem(c, k):
                 if isinstance(k, int):
                     if 0 <= k < c._len:
@@ -172,7 +168,6 @@ class ParseRuleMeta(type):
                 return cls._regex_str
             mcs.regex_str = regex_str_prop
 
-
             if 'delimiter' in dct['_schema']:
                 dct['_delimiter'] = dct['_schema']['delimiter']
                 parents = (ParseRuleDelimited, ) + parents
@@ -202,19 +197,21 @@ class ParseRuleMeta(type):
                 else:
                     regex_array.append(fld.regex_str)
             if issubclass(cls, ParseRuleDelimited):
-                cls._regex_str = cls.delimiter.join(regex_array)
+                cls._regex_str = cls.delim_regex.join(regex_array)
             else:
                 cls._regex_str = ''.join(regex_array)
         else:
             if issubclass(cls, ParseRulePrimitiveDelimited):
                 if issubclass(cls, ParseRuleString):
-                    cls._regex_str = '[^{:s}]*'.format(delim_escape(cls.parent.delimiter))
+                    cls._regex_str = '[^{:s}]*'.format(cls.parent.delim_regex)
                 elif issubclass(cls, ParseRuleNumber):
                     cls._regex_str = '[0-9]+(?:\.[0-9]*)'
                 else:
                     cls._regex_str = '[0-9]+'
             else:
                 cls._regex_str = '.{{{:d}}}'.format(cls.len)
+
+        
 
         return cls
 
@@ -252,7 +249,3 @@ class RecordSchemaMeta(type):
         #         for obj in sch:
         #             if isinstance(obj['type'], str):
         #                 pass
-
-
-def delim_escape(d):
-    return d
