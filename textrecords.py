@@ -3,6 +3,7 @@ from os.path import dirname, join
 from json import load as json_load
 from copy import deepcopy
 from enum import Enum
+from abc import ABCMeta
 import re
 
 with open(join(dirname(__file__), 'schemas', 'textrecord.json'), 'rt') as f:
@@ -111,21 +112,35 @@ class ParseRuleNumber(ParseRulePrimitive):
 
 class ParseRuleMeta(type):
 
-    @staticmethod
-    def primitive_switch(k):
-        d = {
-            'string': ParseRuleString,
-            'integer': ParseRuleInteger,
-            'number': ParseRuleNumber
-        }
-        return d[k]
+    @property
+    def regex_str(cls):
+        return cls._regex_str
+
+class ParseRulePrimitiveMeta(ParseRuleMeta):
+
+    _primitive_classes = {
+        'string': ParseRuleString,
+        'integer': ParseRuleInteger,
+        'number': ParseRuleNumber
+    }
+
+    @classmethod
+    def primitive_switch(mcs, k):
+        return mcs._primitive_classes[k]
+
+    def __new__(mcs, name, parents, dct):
+        cls = super().__new__(mcs, name, parents, dct)
+
+
+
+class ParseRuleMeta(type):
 
     def __new__(mcs, name, parents, dct):
 
-        @property
-        def regex_str_prop(c):
-            return c._regex_str
-        mcs.regex_str = regex_str_prop
+        # @property
+        # def regex_str_prop(c):
+        #     return c._regex_str
+        # mcs.regex_str = regex_str_prop
 
         if '_field_name' not in dct:
             dct['_field_name'] = None
@@ -163,10 +178,10 @@ class ParseRuleMeta(type):
                     return c._fields[k]
             mcs.__next__ = next
 
-            @property
-            def regex_str_prop(cls):
-                return cls._regex_str
-            mcs.regex_str = regex_str_prop
+            # @property
+            # def regex_str_prop(cls):
+            #     return cls._regex_str
+            # mcs.regex_str = regex_str_prop
 
             if 'delimiter' in dct['_schema']:
                 dct['_delimiter'] = dct['_schema']['delimiter']
@@ -202,16 +217,12 @@ class ParseRuleMeta(type):
                 cls._regex_str = ''.join(regex_array)
         else:
             if issubclass(cls, ParseRulePrimitiveDelimited):
-                if issubclass(cls, ParseRuleString):
-                    cls._regex_str = '[^{:s}]*'.format(cls.parent.delim_regex)
-                elif issubclass(cls, ParseRuleNumber):
-                    cls._regex_str = '[0-9]+(?:\.[0-9]*)'
-                else:
-                    cls._regex_str = '[0-9]+'
+                cls._regex_str = '[^{:s}]*'.format(cls.parent.delim_regex)
             else:
                 cls._regex_str = '.{{{:d}}}'.format(cls.len)
 
-        
+        def init(self, data, level):
+            pass
 
         return cls
 
@@ -232,6 +243,14 @@ class RecordSchemaMeta(type):
         cls._root_class = ParseRuleMeta('{:s}_root'.format(name), (), {'_schema': deepcopy(dct['_schema']),
                                                                        '_parent': cls})
         return cls
+
+    @property
+    def schema(cls):
+        return cls._schema
+
+    @property
+    def root_class(cls):
+        return cls._root_class
         # fields = dct['_fields']
         # if 'delimiter' in sch:
         #     pass
