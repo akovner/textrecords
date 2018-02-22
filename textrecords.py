@@ -2,13 +2,13 @@ from jsonschema import Draft4Validator, ValidationError
 from os.path import dirname, join
 from json import load as json_load
 from copy import deepcopy
-from enum import Enum
 from abc import ABCMeta
 import re
 
 with open(join(dirname(__file__), 'schemas', 'textrecord.json'), 'rt') as f:
     textrecord_schema = json_load(f)
 validator = Draft4Validator(textrecord_schema)
+
 
 def merge_dicts(*dict_args):
     """
@@ -35,13 +35,6 @@ def classproperty(fget):
         fget = classmethod(fget)
 
     return ReadClassPropertyDescriptor(fget)
-
-
-class ParseLevel(Enum):
-    UNPARSED = 1
-    RAW = 2
-    TRIMMED = 3
-    PARSED = 4
 
 
 class RecordSchema:
@@ -81,13 +74,14 @@ class ParseRuleDelimited(ParseRuleCompound):
 
 
 class ParseRuleFixed(ParseRuleCompound):
-    @classproperty
-    def len(cls):
-        pass
+    pass
 
 
 class ParseRulePrimitive(ParseRule):
-    pass
+
+    @classmethod
+    def regex_str(cls):
+        return cls._regex_str
 
 
 class ParseRulePrimitiveFixed(ParseRulePrimitive):
@@ -116,25 +110,6 @@ class ParseRuleMeta(type):
     def regex_str(cls):
         return cls._regex_str
 
-class ParseRulePrimitiveMeta(ParseRuleMeta):
-
-    _primitive_classes = {
-        'string': ParseRuleString,
-        'integer': ParseRuleInteger,
-        'number': ParseRuleNumber
-    }
-
-    @classmethod
-    def primitive_switch(mcs, k):
-        return mcs._primitive_classes[k]
-
-    def __new__(mcs, name, parents, dct):
-        cls = super().__new__(mcs, name, parents, dct)
-
-
-
-class ParseRuleMeta(type):
-
     def __new__(mcs, name, parents, dct):
 
         # @property
@@ -145,16 +120,16 @@ class ParseRuleMeta(type):
         if '_field_name' not in dct:
             dct['_field_name'] = None
 
-        is_primitive = isinstance(dct['_schema'], str)
+        is_primitive = 'properties' not in dct['_schema']
         if is_primitive:
             compound_superclass = (ParseRulePrimitiveDelimited
                                    if issubclass(dct['_parent'], ParseRuleDelimited)
                                    else ParseRulePrimitiveFixed)
-            parents = (mcs.primitive_switch(dct['_schema']), compound_superclass, ) + parents
+            parents = (ParseRulePrimitiveMeta.primitive_switch(dct['_schema']['type']), compound_superclass, ) + parents
         else:
             def getitem(c, k):
                 if isinstance(k, int):
-                    if 0 <= k < c._len:
+                    if 0 <= k < len(c):
                         return c._fields[c._fields_idx[k]]
                     else:
                         raise IndexError('Index out of range: {0:d} not between 0 and {1:d}'.format(k, c._len))
@@ -178,6 +153,9 @@ class ParseRuleMeta(type):
                     return c._fields[k]
             mcs.__next__ = next
 
+            def len_func(c):
+                return len(c._fields_idx)
+            mcs.__len__ = len_func
             # @property
             # def regex_str_prop(cls):
             #     return cls._regex_str
@@ -196,19 +174,18 @@ class ParseRuleMeta(type):
             for i, obj in enumerate(dct['_schema']['properties']):
                 fields[obj['name']] = ParseRuleMeta('{0:s}_{1:s}'.format(name, obj['name']),
                                                    (),
-                                                   {'_schema': deepcopy(obj['type']),
+                                                   {'_schema': obj,
                                                     '_field_name': obj['name'],
                                                     '_parent': cls})
                 fields_idx.append(obj['name'])
 
             cls._fields = fields
             cls._fields_idx = tuple(fields_idx)
-            cls._len = len(cls._fields_idx)
 
             regex_array = []
             for fld in cls:
                 if issubclass(fld, ParseRulePrimitive):
-                    regex_array.append('({:s})'.format(fld.regex_str))
+                    regex_array.append('({:s})'.format(fld._regex_str))
                 else:
                     regex_array.append(fld.regex_str)
             if issubclass(cls, ParseRuleDelimited):
@@ -219,12 +196,28 @@ class ParseRuleMeta(type):
             if issubclass(cls, ParseRulePrimitiveDelimited):
                 cls._regex_str = '[^{:s}]*'.format(cls.parent.delim_regex)
             else:
-                cls._regex_str = '.{{{:d}}}'.format(cls.len)
+                cls._regex_str = '.{{{:d}}}'.format(dct['_schema']['length'])
 
         def init(self, data, level):
             pass
 
         return cls
+
+
+class ParseRulePrimitiveMeta(ParseRuleMeta):
+
+    _primitive_classes = {
+        'string': ParseRuleString,
+        'integer': ParseRuleInteger,
+        'number': ParseRuleNumber
+    }
+
+    @classmethod
+    def primitive_switch(mcs, k):
+        return mcs._primitive_classes[k]
+
+    def __new__(mcs, name, parents, dct):
+        cls = super().__new__(mcs, name, parents, dct)
 
 
 class RecordSchemaMeta(type):
