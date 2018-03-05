@@ -104,84 +104,61 @@ class ParseRuleNumber(ParseRulePrimitive):
     pass
 
 
-class ParseRuleMeta(type):
+class ParseRuleType(type):
 
     @property
     def regex_str(cls):
         return cls._regex_str
 
     def __new__(mcs, name, parents, dct):
-
-        # @property
-        # def regex_str_prop(c):
-        #     return c._regex_str
-        # mcs.regex_str = regex_str_prop
-
         if '_field_name' not in dct:
             dct['_field_name'] = None
 
-        is_primitive = 'properties' not in dct['_schema']
-        if is_primitive:
-            compound_superclass = (ParseRulePrimitiveDelimited
-                                   if issubclass(dct['_parent'], ParseRuleDelimited)
-                                   else ParseRulePrimitiveFixed)
-            parents = (ParseRulePrimitiveMeta.primitive_switch(dct['_schema']['type']), compound_superclass, ) + parents
+        cls = super(ParseRuleType, mcs).__new__(mcs, name, parents, dct)
+        return cls
+
+
+class ParseRulePrimitiveType(ParseRuleType):
+    pass
+
+
+class ParseRulePrimitiveFixedType(ParseRulePrimitiveType):
+    def __len__(cls):
+        return cls._length
+
+
+def is_primitive(dct):
+    return 'properties' in dct
+
+
+class ParseRuleCompoundType(ParseRuleType):
+
+    def __new__(typ, name, parents, dct):
+        if 'delimiter' in dct['_schema']:
+            dct['_delimiter'] = dct['_schema']['delimiter']
+            parents = (ParseRuleDelimited, ) + parents
         else:
-            def getitem(c, k):
-                if isinstance(k, int):
-                    if 0 <= k < len(c):
-                        return c._fields[c._fields_idx[k]]
-                    else:
-                        raise IndexError('Index out of range: {0:d} not between 0 and {1:d}'.format(k, c._len))
-                elif isinstance(k, str):
-                    return c._fields[k]
-                else:
-                    raise IndexError('Index must be of type `str` or `int`')
-            mcs.__getitem__ = getitem
+            parents = (ParseRuleFixed, ) + parents
+        cls = super(ParseRuleCompoundType, typ).__new__(typ, name, parents, dct)
 
-            def iter(c):
-                c._iter_place = 0
-                return c
-            mcs.__iter__ = iter
+        return cls
 
-            def next(c):
-                if c._iter_place >= len(c._fields_idx):
-                    raise StopIteration
-                else:
-                    k = c._fields_idx[c._iter_place]
-                    c._iter_place += 1
-                    return c._fields[k]
-            mcs.__next__ = next
+    def __init__(cls):
+        fields = {}
+        fields_idx = []
+        for i, obj in enumerate(cls._schema['properties']):
+            parent_type = ParseRulePrimitiveType if is_primitive(obj['name']) else ParseRuleCompoundType
+            fields[obj['name']] = parent_type('{0:s}_{1:s}'.format(type(cls).__name__, obj['name']),
+                                               (),
+                                               {'_schema': obj,
+                                                '_field_name': obj['name'],
+                                                '_supnode': cls})
+            fields_idx.append(obj['name'])
 
-            def len_func(c):
-                return len(c._fields_idx)
-            mcs.__len__ = len_func
-            # @property
-            # def regex_str_prop(cls):
-            #     return cls._regex_str
-            # mcs.regex_str = regex_str_prop
+        cls._fields = fields
+        cls._fields_idx = tuple(fields_idx)
 
-            if 'delimiter' in dct['_schema']:
-                dct['_delimiter'] = dct['_schema']['delimiter']
-                parents = (ParseRuleDelimited, ) + parents
-            else:
-                parents = (ParseRuleFixed, ) + parents
-
-        cls = super(ParseRuleMeta, mcs).__new__(mcs, name, parents, dct)
-        if not is_primitive:
-            fields = {}
-            fields_idx = []
-            for i, obj in enumerate(dct['_schema']['properties']):
-                fields[obj['name']] = ParseRuleMeta('{0:s}_{1:s}'.format(name, obj['name']),
-                                                   (),
-                                                   {'_schema': obj,
-                                                    '_field_name': obj['name'],
-                                                    '_parent': cls})
-                fields_idx.append(obj['name'])
-
-            cls._fields = fields
-            cls._fields_idx = tuple(fields_idx)
-
+        if issubclass(cls, ParseRuleCompound):
             regex_array = []
             for fld in cls:
                 if issubclass(fld, ParseRulePrimitive):
@@ -196,28 +173,45 @@ class ParseRuleMeta(type):
             if issubclass(cls, ParseRulePrimitiveDelimited):
                 cls._regex_str = '[^{:s}]*'.format(cls.parent.delim_regex)
             else:
-                cls._regex_str = '.{{{:d}}}'.format(dct['_schema']['length'])
+                cls._length = cls._schema['length']
+                cls._regex_str = '.{{{:d}}}'.format(cls._length)
 
-        def init(self, data, level):
-            pass
+        def init(self, data):
+            print(data)
+        cls.__init__ = init
 
+    def __getitem__(cls, k):
+        if isinstance(k, int):
+            if 0 <= k < len(cls):
+                return cls._fields[cls._fields_idx[k]]
+            else:
+                raise IndexError('Index out of range: {0:d} not between 0 and {1:d}'.format(k, len(cls)))
+        elif isinstance(k, str):
+            return cls._fields[k]
+        else:
+            raise IndexError('Index must be of type `str` or `int`')
+
+    def __iter__(cls):
+        cls._iter_place = 0
         return cls
 
+    def __next__(cls):
+        if cls._iter_place >= len(cls._fields_idx):
+            raise StopIteration
+        else:
+            k = cls._fields_idx[cls._iter_place]
+            cls._iter_place += 1
+            return cls._fields[k]
 
-class ParseRulePrimitiveMeta(ParseRuleMeta):
+    def __len__(cls):
+        return len(cls._fields_idx)
 
-    _primitive_classes = {
-        'string': ParseRuleString,
-        'integer': ParseRuleInteger,
-        'number': ParseRuleNumber
-    }
 
-    @classmethod
-    def primitive_switch(mcs, k):
-        return mcs._primitive_classes[k]
-
-    def __new__(mcs, name, parents, dct):
-        cls = super().__new__(mcs, name, parents, dct)
+primitive_switch = {
+    'string': ParseRuleString,
+    'integer': ParseRuleInteger,
+    'number': ParseRuleNumber
+}
 
 
 class RecordSchemaMeta(type):
@@ -233,8 +227,9 @@ class RecordSchemaMeta(type):
         if RecordSchema not in parents:
             parents = (RecordSchema, ) + parents
         cls = super(RecordSchemaMeta, mcs).__new__(mcs, name, parents, dct)
-        cls._root_class = ParseRuleMeta('{:s}_root'.format(name), (), {'_schema': deepcopy(dct['_schema']),
-                                                                       '_parent': cls})
+        cls._root_class = ParseRuleType('{:s}_root'.format(name), (), {'_schema': deepcopy(dct['_schema']),
+                                                                       '_parent': cls,
+                                                                       '_depth': 0})
         return cls
 
     @property
