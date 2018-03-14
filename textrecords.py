@@ -1,14 +1,17 @@
 from jsonschema import Draft4Validator, ValidationError
 from os.path import dirname, join
 from json import load as json_load
-from copy import deepcopy
-from abc import ABCMeta
 import re
 
 with open(join(dirname(__file__), 'schemas', 'textrecord.json'), 'rt') as f:
     textrecord_schema = json_load(f)
 validator = Draft4Validator(textrecord_schema)
 
+levels = {
+    'parsed',
+    'clean',
+    'raw'
+}
 
 def merge_dicts(*dict_args):
     """
@@ -48,11 +51,31 @@ class RecordSchema:
         return cls._root_class
 
 
+def clean_level(level):
+    lc = level.lower()
+    if lc in levels:
+        return lc
+    else:
+        return ValueError('Level `{}` not a recognized parse level'.format(level))
+
+
 class ParseRule():
 
+    def __init__(self, *args, **kwargs):
+        if 'level' in kwargs:
+            c_level = clean_level
+            if isinstance(ValueError, c_level):
+                raise c_level
+        self._data = args[0]
+        if isinstance(self._data, str):
+            self._source_level = 'raw'
+        else:
+            self._source_level = 'parsed'
+
+
     @classproperty
-    def parent(cls):
-        return cls._parent
+    def supnode(cls):
+        return cls._supnode
 
     @classproperty
     def field_name(cls):
@@ -63,7 +86,7 @@ class ParseRuleCompound(ParseRule):
     pass
 
 
-class ParseRuleDelimited(ParseRuleCompound):
+class ParseRuleDelimited(ParseRule):
     @classproperty
     def delimiter(cls):
         return cls._delimiter
@@ -73,7 +96,7 @@ class ParseRuleDelimited(ParseRuleCompound):
         return ''.join(['\\x{:s}'.format(c.encode('unicode_escape').hex()) for c in cls.delimiter])
 
 
-class ParseRuleFixed(ParseRuleCompound):
+class ParseRuleFixed(ParseRule):
     pass
 
 
@@ -83,13 +106,8 @@ class ParseRulePrimitive(ParseRule):
     def regex_str(cls):
         return cls._regex_str
 
-
-class ParseRulePrimitiveFixed(ParseRulePrimitive):
-    pass
-
-
-class ParseRulePrimitiveDelimited(ParseRulePrimitive):
-    pass
+    def __init__(self, *args):
+        pass
 
 
 class ParseRuleString(ParseRulePrimitive):
@@ -119,7 +137,27 @@ class ParseRuleType(type):
 
 
 class ParseRulePrimitiveType(ParseRuleType):
-    pass
+    def __new__(typ, *args):
+        name = args[0]
+        parents = args[1]
+        dct = args[2]
+
+        if issubclass(dct['_supnode'], ParseRuleFixed):
+            parents = (ParseRuleFixed, ParseRulePrimitive) + parents
+        else:
+            parents = (ParseRuleDelimited, ParseRulePrimitive) + parents
+        cls = super(ParseRulePrimitiveType, typ).__new__(typ, name, parents, dct)
+
+        return cls
+
+    def __init__(cls, *args):
+        if issubclass(cls, ParseRuleDelimited):
+            cls._regex_str = '[^{:s}]*'.format(cls.supnode.delim_regex)
+        else:
+            cls._length = cls._schema['length']
+            cls._regex_str = '.{{{:d}}}'.format(cls._length)
+
+        super(ParseRulePrimitiveType, cls).__init__(cls, *args)
 
 
 class ParseRulePrimitiveFixedType(ParseRulePrimitiveType):
@@ -128,26 +166,29 @@ class ParseRulePrimitiveFixedType(ParseRulePrimitiveType):
 
 
 def is_primitive(dct):
-    return 'properties' in dct
+    return 'properties' not in dct
 
 
 class ParseRuleCompoundType(ParseRuleType):
-
-    def __new__(typ, name, parents, dct):
+    def __new__(typ, *args):
+        name = args[0]
+        parents = args[1]
+        dct = args[2]
         if 'delimiter' in dct['_schema']:
-            dct['_delimiter'] = dct['_schema']['delimiter']
-            parents = (ParseRuleDelimited, ) + parents
+            parents = (ParseRuleDelimited, ParseRuleCompound) + parents
         else:
-            parents = (ParseRuleFixed, ) + parents
-        cls = super(ParseRuleCompoundType, typ).__new__(typ, name, parents, dct)
+            parents = (ParseRuleFixed, ParseRuleCompound) + parents
+        cls = super().__new__(typ, name, parents, dct)
 
         return cls
 
-    def __init__(cls):
+    def __init__(cls, *args):
+        if issubclass(cls, ParseRuleDelimited):
+            cls._delimiter = cls._schema['delimiter']
         fields = {}
         fields_idx = []
         for i, obj in enumerate(cls._schema['properties']):
-            parent_type = ParseRulePrimitiveType if is_primitive(obj['name']) else ParseRuleCompoundType
+            parent_type = ParseRulePrimitiveType if is_primitive(obj) else ParseRuleCompoundType
             fields[obj['name']] = parent_type('{0:s}_{1:s}'.format(type(cls).__name__, obj['name']),
                                                (),
                                                {'_schema': obj,
@@ -158,27 +199,18 @@ class ParseRuleCompoundType(ParseRuleType):
         cls._fields = fields
         cls._fields_idx = tuple(fields_idx)
 
-        if issubclass(cls, ParseRuleCompound):
-            regex_array = []
-            for fld in cls:
-                if issubclass(fld, ParseRulePrimitive):
-                    regex_array.append('({:s})'.format(fld._regex_str))
-                else:
-                    regex_array.append(fld.regex_str)
-            if issubclass(cls, ParseRuleDelimited):
-                cls._regex_str = cls.delim_regex.join(regex_array)
+        regex_array = []
+        for fld in cls:
+            if issubclass(fld, ParseRulePrimitive):
+                regex_array.append('({:s})'.format(fld._regex_str))
             else:
-                cls._regex_str = ''.join(regex_array)
+                regex_array.append(fld.regex_str)
+        if issubclass(cls, ParseRuleDelimited):
+            cls._regex_str = cls.delim_regex.join(regex_array)
         else:
-            if issubclass(cls, ParseRulePrimitiveDelimited):
-                cls._regex_str = '[^{:s}]*'.format(cls.parent.delim_regex)
-            else:
-                cls._length = cls._schema['length']
-                cls._regex_str = '.{{{:d}}}'.format(cls._length)
+            cls._regex_str = ''.join(regex_array)
 
-        def init(self, data):
-            print(data)
-        cls.__init__ = init
+        super().__init__(cls, *args)
 
     def __getitem__(cls, k):
         if isinstance(k, int):
@@ -214,8 +246,12 @@ primitive_switch = {
 }
 
 
-class RecordSchemaMeta(type):
-    def __new__(mcs, name, parents, dct):
+class TextRecordType(type):
+    def __new__(mcs, *args):
+        name = args[0]
+        parents = args[1]
+        dct = args[2]
+
         # Test that schema exists in the dictionary, and is a valid textrecord schema
         if '_schema' not in dct:
             raise IndexError('`_schema` class member must be defined')
@@ -226,11 +262,20 @@ class RecordSchemaMeta(type):
 
         if RecordSchema not in parents:
             parents = (RecordSchema, ) + parents
-        cls = super(RecordSchemaMeta, mcs).__new__(mcs, name, parents, dct)
-        cls._root_class = ParseRuleType('{:s}_root'.format(name), (), {'_schema': deepcopy(dct['_schema']),
-                                                                       '_parent': cls,
-                                                                       '_depth': 0})
+        cls = super().__new__(mcs, name, parents, dct)
         return cls
+
+    def __init__(cls, *args):
+        name = args[0]
+        cls._root_class = ParseRuleCompoundType('{:s}_root'.format(name),
+                                                (),
+                                                {'_schema': cls._schema, '_supnode': cls})
+        cls._regex_primitive = re.compile('^{}$'.format(cls._root_class.regex_primitive.pattern))
+        super().__init__(cls, *args)
+
+    @property
+    def regex_primitive(cls):
+        return cls._regex_primitive
 
     @property
     def schema(cls):
@@ -239,20 +284,3 @@ class RecordSchemaMeta(type):
     @property
     def root_class(cls):
         return cls._root_class
-        # fields = dct['_fields']
-        # if 'delimiter' in sch:
-        #     pass
-        # else:
-        #     if isinstance(sch, dict):
-        #         for name, obj in sch['properties'].items():
-        #             if isinstance(obj['type'], str):
-        #                 fields[name] = get_fixed_parserule_class(obj['type'])
-        #             elif 'delimiter' in obj['type']:
-        #                 fields[name] = ParseRuleFixedMeta('', (), {'schema': obj['type']})
-        #             else:
-        #                 fields[name] = ParseRuleDelimMeta('', (), {'schema': obj['type']})
-        #
-        #     else:
-        #         for obj in sch:
-        #             if isinstance(obj['type'], str):
-        #                 pass
